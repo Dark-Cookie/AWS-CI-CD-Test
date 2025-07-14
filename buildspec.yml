@@ -1,0 +1,24 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    MY_ENV_FILE: "arn:aws:secretsmanager:ap-south-1:027961416307:secret:myapp/env_file"
+
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+    commands:
+      - echo "Installing dependencies"
+  pre_build:
+    commands:
+      - echo "Retrieving the entire .env file from Secrets Manager"
+      # Fetch the .env file from Secrets Manager and save it to a temporary location
+      - aws secretsmanager get-secret-value --secret-id $MY_ENV_FILE --query SecretString --output text > .env
+      - echo "Setting up environment variables from .env file"
+      # Export the environment variables from the .env file
+      - export $(cat .env | xargs)
+  build:
+    commands:
+      - echo "Building with Docker Compose"
+      - docker-compose up --build -d
