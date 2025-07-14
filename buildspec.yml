@@ -6,10 +6,10 @@ env:
 
 phases:
   install:
-    runtime-versions:
-      docker: 18
+    # Removed the docker runtime version specification
     commands:
       - echo "Installing dependencies"
+      - docker --version  # Verify Docker is available in the environment
   pre_build:
     commands:
       - echo "Retrieving the entire .env file from Secrets Manager"
