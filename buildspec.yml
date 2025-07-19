@@ -5,11 +5,12 @@ env:
     SECRET: ""
     FRONTEND_DIR: "frontend"
     BACKEND_DIR: "app"
+    DOCKERHUB_SECRET_ID: "chatapp/dev/dockerhub-credentials"  # Replace with your actual secret ID or ARN
 
 phases:
   install:
     runtime-versions:
-      python: 3.8
+      python: 3.13
     commands:
       - echo Installing dependencies...
       - pip install -r requirements.txt  # Install root dependencies
@@ -18,6 +19,9 @@ phases:
     commands:
       - echo Retrieving secrets from Secrets Manager...
       - export SECRET=$(aws secretsmanager get-secret-value --secret-id "chatapp/dev/.env" --query SecretString --output text)
+      - export DOCKERHUB_CREDENTIALS=$(aws secretsmanager get-secret-value --secret-id $DOCKERHUB_SECRET_ID --query SecretString --output text)
+      - export DOCKERHUB_USERNAME=$(echo $DOCKERHUB_CREDENTIALS | jq -r '.dockerhub-username')
+      - export DOCKERHUB_PASSWORD=$(echo $DOCKERHUB_CREDENTIALS | jq -r '.dockerhub-password')
       - echo Secrets retrieved successfully.
       - echo Installing backend dependencies...
       - cd $BACKEND_DIR && pip install -r requirements.txt  # Install backend dependencies
@@ -27,15 +31,20 @@ phases:
   build:
     commands:
       - echo Building the backend Docker image...
-      - cd $BACKEND_DIR && docker build -t backend-image .
+      - cd $BACKEND_DIR && docker build -t $DOCKERHUB_USERNAME/backend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION .
       - echo Building the frontend Docker image...
-      - cd ../$FRONTEND_DIR && docker build -t frontend-image .
+      - cd ../$FRONTEND_DIR && docker build -t $DOCKERHUB_USERNAME/frontend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION .
       - echo Docker images built.
 
   post_build:
     commands:
-      - echo Running Docker Compose to bring up containers...
-      - docker-compose up --build
+      - echo Logging in to DockerHub...
+      - echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USERNAME --password-stdin
+      - echo Pushing backend Docker image to DockerHub...
+      - docker push $DOCKERHUB_USERNAME/backend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo Pushing frontend Docker image to DockerHub...
+      - docker push $DOCKERHUB_USERNAME/frontend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo Docker images pushed to DockerHub.
 
 artifacts:
   files:
