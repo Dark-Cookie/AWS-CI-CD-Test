@@ -4,7 +4,7 @@ phases:
   install:
     commands:
       - echo "Retrieving .env file from Secrets Manager..."
-      - SECRET=$(aws secretsmanager get-secret-value --secret-id "YourSecretId" --query SecretString --output text)
+      - SECRET=$(aws secretsmanager get-secret-value --secret-id "chatapp/dev/.env" --query SecretString --output text)
       - echo $SECRET | jq -r '.GOOGLE_API_KEY' > .env
       - echo $SECRET | jq -r '.GROQ_API_KEY' >> .env
       - echo $SECRET | jq -r '.FRONTEND_URL' >> .env
