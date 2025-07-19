@@ -1,57 +1,43 @@
 version: 0.2
 
-env:
-  variables:
-    SECRET: ""
-    FRONTEND_DIR: "frontend"
-    BACKEND_DIR: "app"
-    DOCKERHUB_SECRET_ID: "chatapp/dev/dockerhub-credentials"  # Replace with your actual secret ID or ARN
-
 phases:
   install:
     runtime-versions:
-      python: 3.13
+      docker: 20
     commands:
       - echo Installing dependencies...
-      - pip install -r requirements.txt  # Install root dependencies
+      - curl -sSL https://get.docker.com/ | sh
+      - docker --version
+      - echo Retrieving Docker Hub credentials from Secrets Manager...
+      # Fetch Docker credentials from Secrets Manager and set them as environment variables
+      - export DOCKER_USERNAME=$(aws secretsmanager get-secret-value --secret-id chatapp/dev/dockerhub-credentials --query 'SecretString' --output text | jq -r '.username')
+      - export DOCKER_PASSWORD=$(aws secretsmanager get-secret-value --secret-id chatapp/dev/dockerhub-credentials --query 'SecretString' --output text | jq -r '.password')
+      - echo Logging into Docker Hub...
+      - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
 
   pre_build:
     commands:
-      - echo Retrieving secrets from Secrets Manager...
-      - export SECRET=$(aws secretsmanager get-secret-value --secret-id "chatapp/dev/.env" --query SecretString --output text)
-      - export DOCKERHUB_CREDENTIALS=$(aws secretsmanager get-secret-value --secret-id $DOCKERHUB_SECRET_ID --query SecretString --output text)
-      - export DOCKERHUB_USERNAME=$(echo $DOCKERHUB_CREDENTIALS | jq -r '.dockerhub-username')
-      - export DOCKERHUB_PASSWORD=$(echo $DOCKERHUB_CREDENTIALS | jq -r '.dockerhub-password')
-      - echo Secrets retrieved successfully.
-      - echo Installing backend dependencies...
-      - cd $BACKEND_DIR && pip install -r requirements.txt  # Install backend dependencies
-      - echo Installing frontend dependencies...
-      - cd ../$FRONTEND_DIR && pip install -r requirements.txt  # Install frontend dependencies
+      - echo Starting build...
+      - echo Build started on `date`
 
   build:
     commands:
-      - echo Building the backend Docker image...
-      - cd $BACKEND_DIR && docker build -t $DOCKERHUB_USERNAME/backend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION .
-      - echo Building the frontend Docker image...
-      - cd ../$FRONTEND_DIR && docker build -t $DOCKERHUB_USERNAME/frontend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION .
-      - echo Docker images built.
+      - echo Building Docker image...
+      - docker build -t $DOCKER_USERNAME/$DOCKER_IMAGE:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+      - echo Build complete.
 
   post_build:
     commands:
-      - echo Logging in to DockerHub...
-      - echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USERNAME --password-stdin
-      - echo Pushing backend Docker image to DockerHub...
-      - docker push $DOCKERHUB_USERNAME/backend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION
-      - echo Pushing frontend Docker image to DockerHub...
-      - docker push $DOCKERHUB_USERNAME/frontend-image:$CODEBUILD_RESOLVED_SOURCE_VERSION
-      - echo Docker images pushed to DockerHub.
+      - echo Pushing Docker image to Docker Hub...
+      - docker push $DOCKER_USERNAME/$DOCKER_IMAGE:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - echo Docker image pushed successfully.
 
 artifacts:
   files:
-    - '**/*'
-  base-directory: backend/
-  discard-paths: yes
+    - Dockerfile
+    - docker-compose.yml
+    - .dockerignore
 
-cache:
-  paths:
-    - '/root/.cache/pip/**/*'  # Cache pip dependencies to speed up builds
+env:
+  variables:
+    DOCKER_IMAGE: "your-image-name"
