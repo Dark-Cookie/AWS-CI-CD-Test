@@ -1,17 +1,48 @@
 version: 0.2
 
+env:
+  variables:
+    SECRET: ""
+    FRONTEND_DIR: "frontend"
+    BACKEND_DIR: "app"
+
 phases:
   install:
+    runtime-versions:
+      python: 3.8
     commands:
-      - echo "Retrieving .env file from Secrets Manager..."
-      - SECRET=$(aws secretsmanager get-secret-value --secret-id "chatapp/dev/.env" --query SecretString --output text)
-      - echo $SECRET | jq -r '.GOOGLE_API_KEY' > .env
-      - echo $SECRET | jq -r '.GROQ_API_KEY' >> .env
-      - echo $SECRET | jq -r '.FRONTEND_URL' >> .env
-      - echo $SECRET | jq -r '.POSTGRES_USER' >> .env
-      - echo $SECRET | jq -r '.POSTGRES_PASSWORD' >> .env
-      # Add other environment variables similarly
+      - echo Installing dependencies...
+      - pip install -r requirements.txt  # Install root dependencies
+
+  pre_build:
+    commands:
+      - echo Retrieving secrets from Secrets Manager...
+      - export SECRET=$(aws secretsmanager get-secret-value --secret-id "chatapp/dev/.env" --query SecretString --output text)
+      - echo Secrets retrieved successfully.
+      - echo Installing backend dependencies...
+      - cd $BACKEND_DIR && pip install -r requirements.txt  # Install backend dependencies
+      - echo Installing frontend dependencies...
+      - cd ../$FRONTEND_DIR && pip install -r requirements.txt  # Install frontend dependencies
+
   build:
     commands:
-      - echo "Building application..."
-      - ./start-your-app.sh
+      - echo Building the backend Docker image...
+      - cd $BACKEND_DIR && docker build -t backend-image .
+      - echo Building the frontend Docker image...
+      - cd ../$FRONTEND_DIR && docker build -t frontend-image .
+      - echo Docker images built.
+
+  post_build:
+    commands:
+      - echo Running Docker Compose to bring up containers...
+      - docker-compose up --build
+
+artifacts:
+  files:
+    - '**/*'
+  base-directory: backend/
+  discard-paths: yes
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'  # Cache pip dependencies to speed up builds
