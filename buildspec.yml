@@ -1,24 +1,17 @@
 version: 0.2
 
-env:
-  secrets-manager:
-    MY_ENV_FILE: "arn:aws:secretsmanager:ap-south-1:027961416307:secret:myapp/env_file"
-
 phases:
   install:
-    # Removed the docker runtime version specification
     commands:
-      - echo "Installing dependencies"
-      - docker --version  # Verify Docker is available in the environment
-  pre_build:
-    commands:
-      - echo "Retrieving the entire .env file from Secrets Manager"
-      # Fetch the .env file from Secrets Manager and save it to a temporary location
-      - aws secretsmanager get-secret-value --secret-id $MY_ENV_FILE --query SecretString --output text > .env
-      - echo "Setting up environment variables from .env file"
-      # Export the environment variables from the .env file
-      - export $(cat .env | xargs)
+      - echo "Retrieving .env file from Secrets Manager..."
+      - SECRET=$(aws secretsmanager get-secret-value --secret-id "YourSecretId" --query SecretString --output text)
+      - echo $SECRET | jq -r '.GOOGLE_API_KEY' > .env
+      - echo $SECRET | jq -r '.GROQ_API_KEY' >> .env
+      - echo $SECRET | jq -r '.FRONTEND_URL' >> .env
+      - echo $SECRET | jq -r '.POSTGRES_USER' >> .env
+      - echo $SECRET | jq -r '.POSTGRES_PASSWORD' >> .env
+      # Add other environment variables similarly
   build:
     commands:
-      - echo "Building with Docker Compose"
-      - docker-compose up --build -d
+      - echo "Building application..."
+      - ./start-your-app.sh
